@@ -11,7 +11,7 @@ func main() {
 		exitUnrecognisedCmd()
 	}
 
-	var cmd func([]string) error
+	var cmd func(args []string) error
 	switch os.Args[1] {
 	case "generate":
 		cmd = Generate
@@ -32,7 +32,7 @@ Usage: tokens <command>
 
 Commands:
   generate    Generate random tokens and write them to a file
-  import      Import tokens from a file into a database
+  import      Import tokens from a file into a postgres database
 
 Run 'tokens <command> -help' for more information about a command.
 
