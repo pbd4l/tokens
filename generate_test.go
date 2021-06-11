@@ -13,16 +13,19 @@ func TestGenerate(t *testing.T) {
 	require.Nil(t, err)
 	defer os.Remove(f.Name())
 
-	err = Generate([]string{
-		"-file", f.Name(),
-		"-n", "5",
-		"-seed", "1",
-	})
+	cmd := generateCmd()
+	err = cmd.Flags().Set("file", f.Name())
+	require.Nil(t, err)
+	err = cmd.Flags().Set("number", "5")
+	require.Nil(t, err)
+	err = cmd.Flags().Set("seed", "1")
+	require.Nil(t, err)
+
+	err = cmd.Execute()
 	require.Nil(t, err)
 
 	b, err := ioutil.ReadAll(f)
 	require.Nil(t, err)
-
 	require.Equal(t, `xvlbzgb
 aicmraj
 wwhthct
