@@ -8,15 +8,15 @@ import (
 )
 
 func main() {
-	var rootCmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "tokens",
 		Short: "CLI for token management",
 	}
-	rootCmd.AddCommand(generateCmd())
-	rootCmd.AddCommand(importCmd())
-	err := rootCmd.Execute()
+	cmd.AddCommand(generateCmd())
+	cmd.AddCommand(importCmd())
+	err := cmd.Execute()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(cmd.ErrOrStderr(), err)
 		os.Exit(1)
 	}
 }

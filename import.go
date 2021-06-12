@@ -5,24 +5,31 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"regexp"
 	"strings"
 
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func importCmd() *cobra.Command {
-	var dsn string
 	var file string
 	var bs int
+
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import tokens to a postgres database",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var r io.Reader = os.Stdin
+			log.SetOutput(cmd.ErrOrStderr())
+			dsn := viper.GetString("dsn")
+			if dsn == "" {
+				return fmt.Errorf("missing postgres data source name")
+			}
+			var r io.Reader = cmd.InOrStdin()
 			if file != "" {
 				f, err := os.Open(file)
 				if err != nil {
@@ -31,19 +38,24 @@ func importCmd() *cobra.Command {
 				defer f.Close()
 				r = f
 			}
-			return importTokens(r, dsn, bs, cmd.ErrOrStderr())
+			return importTokens(r, dsn, bs)
 		},
 	}
-	cmd.Flags().StringVarP(&dsn, "dsn", "", "", "postgres data-source-name")
-	must(cmd.MarkFlagRequired("dsn"))
+	viper.SetEnvPrefix("tokens")
+
+	cmd.Flags().String("dsn", "", "postgres data source name (env TOKENS_DSN)")
+	must(viper.BindPFlag("dsn", cmd.Flags().Lookup("dsn")))
+	must(viper.BindEnv("dsn"))
+
 	cmd.Flags().StringVarP(&file, "file", "f", "", "file to read the tokens from. will read from stdin if omitted")
 	cmd.Flags().IntVarP(&bs, "bs", "b", 10000, "batch size used for bulk import")
+
 	return cmd
 }
 
 var tokenRe = regexp.MustCompile(`^[a-z]{7}$`)
 
-func importTokens(r io.Reader, dsn string, bs int, outErr io.Writer) error {
+func importTokens(r io.Reader, dsn string, bs int) error {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("could not open database: %w", err)
@@ -59,12 +71,12 @@ func importTokens(r io.Reader, dsn string, bs int, outErr io.Writer) error {
 		return fmt.Errorf("could not create/ensure table: %w", err)
 	}
 
-	q := newImportTokensQuery(bs)
+	q := newInsertTokensQuery(bs)
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		token := scanner.Text()
 		if !tokenRe.MatchString(token) {
-			fmt.Fprintf(outErr, "token %s is invalid, skipping\n", token)
+			log.Printf("token \"%s\" is invalid, skipping\n", token)
 			continue
 		}
 		err = q.AddToken(token)
@@ -90,23 +102,38 @@ func importTokens(r io.Reader, dsn string, bs int, outErr io.Writer) error {
 	return nil
 }
 
-type importTokensQuery struct {
+type insertTokensQuery struct {
 	sb   strings.Builder
 	args []interface{}
-	bs   int
+	ms   int
 }
 
-func newImportTokensQuery(bs int) *importTokensQuery {
-	var q importTokensQuery
+func newInsertTokensQuery(maxSize int) *insertTokensQuery {
+	var q insertTokensQuery
 	q.sb.WriteString("INSERT INTO tokens (token) VALUES ")
-	q.args = make([]interface{}, 0, q.bs)
-	q.bs = bs
+	q.args = make([]interface{}, 0, maxSize)
+	q.ms = maxSize
 	return &q
 }
 
-func (q *importTokensQuery) AddToken(token string) error {
+func (q *insertTokensQuery) Exec(db *sql.DB) error {
+	if len(q.args) == 0 {
+		return nil
+	}
+	q.sb.WriteString(" ON CONFLICT DO NOTHING")
+	_, err := db.Exec(q.sb.String(), q.args...)
+	if err != nil {
+		return err
+	}
+	q.sb.Reset()
+	q.sb.WriteString("INSERT INTO tokens (token) VALUES ")
+	q.args = make([]interface{}, 0, q.ms)
+	return nil
+}
+
+func (q *insertTokensQuery) AddToken(token string) error {
 	l := len(q.args)
-	if l == q.bs {
+	if l == q.ms {
 		return fmt.Errorf("query is full")
 	}
 	if l == 0 {
@@ -118,21 +145,6 @@ func (q *importTokensQuery) AddToken(token string) error {
 	return nil
 }
 
-func (q *importTokensQuery) Full() bool {
-	return len(q.args) == q.bs
-}
-
-func (q *importTokensQuery) Exec(db *sql.DB) error {
-	if len(q.args) == 0 {
-		return nil
-	}
-	q.sb.WriteString(" ON CONFLICT DO NOTHING")
-	_, err := db.Exec(q.sb.String(), q.args...)
-	if err != nil {
-		return err
-	}
-	q.sb.Reset()
-	q.args = make([]interface{}, 0, q.bs)
-	q.sb.WriteString("INSERT INTO tokens (token) VALUES ")
-	return nil
+func (q *insertTokensQuery) Full() bool {
+	return len(q.args) == q.ms
 }
