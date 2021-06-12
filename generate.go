@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"os"
 	"strings"
@@ -21,7 +22,8 @@ func generateCmd() *cobra.Command {
 		Short: "Generate random tokens",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var w io.Writer = os.Stdout
+			log.SetOutput(cmd.ErrOrStderr())
+			var w io.Writer = cmd.OutOrStdout()
 			if file != "" {
 				f, err := os.Create(file)
 				if err != nil {
@@ -30,7 +32,7 @@ func generateCmd() *cobra.Command {
 				defer f.Close()
 				w = f
 			}
-			return generate(w, number, seed)
+			return generateTokens(w, number, seed)
 		},
 	}
 	cmd.Flags().StringVarP(&file, "file", "f", "", "file to save the generated tokens. will write to stdout if omitted")
@@ -39,7 +41,7 @@ func generateCmd() *cobra.Command {
 	return cmd
 }
 
-func generate(w io.Writer, number int, seed int64) error {
+func generateTokens(w io.Writer, number int, seed int64) error {
 	if seed < 0 {
 		seed = time.Now().Unix()
 	}
