@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"os"
 	"strings"
@@ -22,7 +21,6 @@ func generateCmd() *cobra.Command {
 		Short: "Generate random tokens",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			log.SetOutput(cmd.ErrOrStderr())
 			var w io.Writer = cmd.OutOrStdout()
 			if file != "" {
 				f, err := os.Create(file)

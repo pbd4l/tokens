@@ -2,13 +2,16 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
+	"syscall"
 
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
@@ -24,11 +27,10 @@ func importCmd() *cobra.Command {
 		Short: "Import tokens to a postgres database",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			log.SetOutput(cmd.ErrOrStderr())
-			dsn := viper.GetString("dsn")
-			if dsn == "" {
-				return fmt.Errorf("missing postgres data source name")
-			}
+			log.SetOutput(cmd.ErrOrStderr()) // for testing
+
+			ctx, _ := signal.NotifyContext(cmd.Context(), syscall.SIGINT)
+
 			var r io.Reader = cmd.InOrStdin()
 			if file != "" {
 				f, err := os.Open(file)
@@ -38,24 +40,31 @@ func importCmd() *cobra.Command {
 				defer f.Close()
 				r = f
 			}
-			return importTokens(r, dsn, bs)
+
+			dsn := viper.GetString("dsn")
+			if dsn == "" {
+				return fmt.Errorf("missing postgres data source name")
+			}
+
+			return importTokens(ctx, r, dsn, bs)
 		},
 	}
+
+	cmd.Flags().StringVarP(&file, "file", "f", "", "file to read the tokens from. will read from stdin if omitted")
+	cmd.Flags().IntVarP(&bs, "bs", "b", 1000, "batch size used for bulk import")
+
 	viper.SetEnvPrefix("tokens")
 
 	cmd.Flags().String("dsn", "", "postgres data source name (env TOKENS_DSN)")
 	must(viper.BindPFlag("dsn", cmd.Flags().Lookup("dsn")))
 	must(viper.BindEnv("dsn"))
 
-	cmd.Flags().StringVarP(&file, "file", "f", "", "file to read the tokens from. will read from stdin if omitted")
-	cmd.Flags().IntVarP(&bs, "bs", "b", 10000, "batch size used for bulk import")
-
 	return cmd
 }
 
 var tokenRe = regexp.MustCompile(`^[a-z]{7}$`)
 
-func importTokens(r io.Reader, dsn string, bs int) error {
+func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("could not open database: %w", err)
@@ -66,7 +75,12 @@ func importTokens(r io.Reader, dsn string, bs int) error {
 	}
 	defer db.Close()
 
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS tokens (token CHAR(7) PRIMARY KEY)")
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not begin transaction: %w", err)
+	}
+
+	_, err = tx.Exec("CREATE TABLE IF NOT EXISTS tokens (token CHAR(7) PRIMARY KEY)")
 	if err != nil {
 		return fmt.Errorf("could not create/ensure table: %w", err)
 	}
@@ -84,19 +98,24 @@ func importTokens(r io.Reader, dsn string, bs int) error {
 			return fmt.Errorf("could not add token to query: %w", err)
 		}
 		if q.Full() {
-			err = q.Exec(db)
+			err = q.Exec(tx)
 			if err != nil {
 				return fmt.Errorf("could not execute query: %w", err)
 			}
 		}
 	}
-	err = q.Exec(db)
+	err = q.Exec(tx)
 	if err != nil {
 		return fmt.Errorf("could not execute query: %w", err)
 	}
 	err = scanner.Err()
 	if err != nil {
 		return fmt.Errorf("could not scan tokens: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("could not commit transaction: %w", err)
 	}
 
 	return nil
@@ -116,12 +135,12 @@ func newInsertTokensQuery(maxSize int) *insertTokensQuery {
 	return &q
 }
 
-func (q *insertTokensQuery) Exec(db *sql.DB) error {
+func (q *insertTokensQuery) Exec(tx *sql.Tx) error {
 	if len(q.args) == 0 {
 		return nil
 	}
 	q.sb.WriteString(" ON CONFLICT DO NOTHING")
-	_, err := db.Exec(q.sb.String(), q.args...)
+	_, err := tx.Exec(q.sb.String(), q.args...)
 	if err != nil {
 		return err
 	}
