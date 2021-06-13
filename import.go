@@ -56,7 +56,7 @@ func importCmd() *cobra.Command {
 	return cmd
 }
 
-var tokenRe = regexp.MustCompile(`^[a-z]{7}$`)
+var tokenRegex = regexp.MustCompile(`^[a-z]{7}$`)
 
 func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 	db, err := sql.Open("postgres", dsn)
@@ -69,13 +69,13 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 	defer db.Close()
 
 	// read tokens into a map first, so we can determine non-unique tokens.
-	// note: non-unique here does not account for tokens already in the db, only tokens to be imported.
+	// note: non-unique here does not account for tokens already in the database, only tokens to be imported.
 	// note: a map is not ordered, so currently we are not certain which order the tokens will be inserted.
 	tokens := make(map[string]uint8)
 	s := bufio.NewScanner(r)
 	for s.Scan() {
 		token := s.Text()
-		if !tokenRe.MatchString(token) {
+		if !tokenRegex.MatchString(token) {
 			log.Printf("token \"%s\" is invalid, skipping\n", token)
 			continue
 		}
@@ -85,16 +85,21 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 		return fmt.Errorf("could not scan tokens: %w", err)
 	}
 
+	// use a transaction to ensure the import either succeeds or fails entirely.
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not begin transaction: %w", err)
 	}
 
+	// ensure the tokens table exists.
+	// tokens are 7 characters and must be unique, so we use CHAR(7) PRIMARY KEY.
+	// (consider moving to separate migration command?)
 	_, err = tx.Exec("CREATE TABLE IF NOT EXISTS tokens (token CHAR(7) PRIMARY KEY)")
 	if err != nil {
 		return fmt.Errorf("could not create/ensure table: %w", err)
 	}
 
+	// insert into the database
 	q := newInsertTokensQuery(bs)
 	for token, count := range tokens {
 		if count > 1 {
@@ -109,16 +114,17 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 			}
 		}
 	}
-
 	if err = q.Exec(tx); err != nil {
 		return fmt.Errorf("could not execute query: %w", err)
 	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("could not commit transaction: %w", err)
 	}
+
 	return nil
 }
 
+// insertTokensQuery builds a bulk insert query for tokens
 type insertTokensQuery struct {
 	sb   strings.Builder
 	args []interface{}
@@ -137,6 +143,7 @@ func (q *insertTokensQuery) Exec(tx *sql.Tx) error {
 	if len(q.args) == 0 {
 		return nil
 	}
+	// ON CONFLICT DO NOTHING to skip when inserting an already inserted token
 	q.sb.WriteString(" ON CONFLICT DO NOTHING")
 	if _, err := tx.Exec(q.sb.String(), q.args...); err != nil {
 		return err
