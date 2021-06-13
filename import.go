@@ -69,8 +69,7 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 	if err != nil {
 		return fmt.Errorf("could not open database: %w", err)
 	}
-	err = db.Ping()
-	if err != nil {
+	if err = db.Ping(); err != nil {
 		return fmt.Errorf("could not ping database: %w", err)
 	}
 	defer db.Close()
@@ -86,38 +85,31 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 	}
 
 	q := newInsertTokensQuery(bs)
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		token := scanner.Text()
+	s := bufio.NewScanner(r)
+	for s.Scan() {
+		token := s.Text()
 		if !tokenRe.MatchString(token) {
 			log.Printf("token \"%s\" is invalid, skipping\n", token)
 			continue
 		}
-		err = q.AddToken(token)
-		if err != nil {
+		if err = q.AddToken(token); err != nil {
 			return fmt.Errorf("could not add token to query: %w", err)
 		}
 		if q.Full() {
-			err = q.Exec(tx)
-			if err != nil {
+			if err = q.Exec(tx); err != nil {
 				return fmt.Errorf("could not execute query: %w", err)
 			}
 		}
 	}
-	err = scanner.Err()
-	if err != nil {
+	if err = s.Err(); err != nil {
 		return fmt.Errorf("could not scan tokens: %w", err)
 	}
-
-	err = q.Exec(tx)
-	if err != nil {
+	if err = q.Exec(tx); err != nil {
 		return fmt.Errorf("could not execute query: %w", err)
 	}
-	err = tx.Commit()
-	if err != nil {
+	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("could not commit transaction: %w", err)
 	}
-
 	return nil
 }
 
@@ -140,8 +132,7 @@ func (q *insertTokensQuery) Exec(tx *sql.Tx) error {
 		return nil
 	}
 	q.sb.WriteString(" ON CONFLICT DO NOTHING")
-	_, err := tx.Exec(q.sb.String(), q.args...)
-	if err != nil {
+	if _, err := tx.Exec(q.sb.String(), q.args...); err != nil {
 		return err
 	}
 	q.sb.Reset()

@@ -44,7 +44,6 @@ func generateTokens(w io.Writer, number int, seed int64) error {
 		seed = time.Now().Unix()
 	}
 	rand.Seed(seed)
-
 	bw := bufio.NewWriter(w)
 	for i := 0; i < number; i++ {
 		_, err := bw.WriteString(randomToken() + "\n")
@@ -52,11 +51,9 @@ func generateTokens(w io.Writer, number int, seed int64) error {
 			return fmt.Errorf("could not write token: %w", err)
 		}
 	}
-	err := bw.Flush()
-	if err != nil {
+	if err := bw.Flush(); err != nil {
 		return fmt.Errorf("could not flush writer: %w", err)
 	}
-
 	return nil
 }
 
