@@ -68,6 +68,23 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 	}
 	defer db.Close()
 
+	// read tokens into a map first, so we can determine non-unique tokens.
+	// note: non-unique here does not account for tokens already in the db, only tokens to be imported.
+	// note: a map is not ordered, so currently we are not certain which order the tokens will be inserted.
+	tokens := make(map[string]uint8)
+	s := bufio.NewScanner(r)
+	for s.Scan() {
+		token := s.Text()
+		if !tokenRe.MatchString(token) {
+			log.Printf("token \"%s\" is invalid, skipping\n", token)
+			continue
+		}
+		tokens[token]++
+	}
+	if err = s.Err(); err != nil {
+		return fmt.Errorf("could not scan tokens: %w", err)
+	}
+
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not begin transaction: %w", err)
@@ -79,12 +96,9 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 	}
 
 	q := newInsertTokensQuery(bs)
-	s := bufio.NewScanner(r)
-	for s.Scan() {
-		token := s.Text()
-		if !tokenRe.MatchString(token) {
-			log.Printf("token \"%s\" is invalid, skipping\n", token)
-			continue
+	for token, count := range tokens {
+		if count > 1 {
+			log.Printf("token \"%s\" appears %d times, only importing once", token, count)
 		}
 		if err = q.AddToken(token); err != nil {
 			return fmt.Errorf("could not add token to query: %w", err)
@@ -95,9 +109,7 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 			}
 		}
 	}
-	if err = s.Err(); err != nil {
-		return fmt.Errorf("could not scan tokens: %w", err)
-	}
+
 	if err = q.Exec(tx); err != nil {
 		return fmt.Errorf("could not execute query: %w", err)
 	}
