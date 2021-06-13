@@ -104,15 +104,15 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 			}
 		}
 	}
-	err = q.Exec(tx)
-	if err != nil {
-		return fmt.Errorf("could not execute query: %w", err)
-	}
 	err = scanner.Err()
 	if err != nil {
 		return fmt.Errorf("could not scan tokens: %w", err)
 	}
 
+	err = q.Exec(tx)
+	if err != nil {
+		return fmt.Errorf("could not execute query: %w", err)
+	}
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("could not commit transaction: %w", err)
