@@ -44,6 +44,7 @@ func generateTokens(w io.Writer, number int, seed int64) error {
 		seed = time.Now().Unix()
 	}
 	rand.Seed(seed)
+	// use a buffered writer to speed up many small writes
 	bw := bufio.NewWriter(w)
 	for i := 0; i < number; i++ {
 		_, err := bw.WriteString(randomToken() + "\n")

@@ -45,19 +45,19 @@ apvvirw
 		err = cmd.Execute()
 		require.Nil(t, err)
 
-		tokens := make([]string, 0)
+		tokens := make(map[string]bool)
 		rows, err := db.Query("SELECT token FROM tokens")
 		require.Nil(t, err)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
 			require.Nil(t, err)
-			tokens = append(tokens, token)
+			tokens[token] = true
 		}
-		require.Equal(t, []string{
-			"jriwhbo",
-			"xwqpvnz",
-			"apvvirw",
+		require.Equal(t, map[string]bool{
+			"jriwhbo": true,
+			"xwqpvnz": true,
+			"apvvirw": true,
 		}, tokens)
 	})
 
@@ -71,68 +71,35 @@ pzqpvnz
 dhvvirw
 pzqpvnz
 abiwhbo
+abiwhbo
 `)
 		cmd.SetIn(&stdin)
+
+		var stderr bytes.Buffer
+		cmd.SetErr(&stderr)
 
 		err = cmd.Execute()
 		require.Nil(t, err)
 
-		tokens := make([]string, 0)
+		tokens := make(map[string]bool)
 		rows, err := db.Query("SELECT token FROM tokens")
 		require.Nil(t, err)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
 			require.Nil(t, err)
-			tokens = append(tokens, token)
+			tokens[token] = true
 		}
-		require.Equal(t, []string{
-			"abiwhbo",
-			"pzqpvnz",
-			"dhvvirw",
+		require.Equal(t, map[string]bool{
+			"abiwhbo": true,
+			"pzqpvnz": true,
+			"dhvvirw": true,
 		}, tokens)
-	})
 
-	t.Run("import twice", func(t *testing.T) {
-		_, err = db.Exec("DROP TABLE IF EXISTS tokens")
+		logs, err := testutils.NewLogs(&stderr)
 		require.Nil(t, err)
-
-		var stdin bytes.Buffer
-		stdin.WriteString(`bviwhbo
-qxqpvnz
-kkvvirw
-`)
-		cmd.SetIn(&stdin)
-
-		err = cmd.Execute()
-		require.Nil(t, err)
-
-		stdin = bytes.Buffer{}
-		stdin.WriteString(`bviwhbo
-qxqpvnz
-agvvirw
-kkvvirw
-`)
-		cmd.SetIn(&stdin)
-
-		err = cmd.Execute()
-		require.Nil(t, err)
-
-		tokens := make([]string, 0)
-		rows, err := db.Query("SELECT token FROM tokens")
-		require.Nil(t, err)
-		for rows.Next() {
-			var token string
-			err = rows.Scan(&token)
-			require.Nil(t, err)
-			tokens = append(tokens, token)
-		}
-		require.Equal(t, []string{
-			"bviwhbo",
-			"qxqpvnz",
-			"kkvvirw",
-			"agvvirw",
-		}, tokens)
+		require.True(t, logs.ContainsMatch(regexp.MustCompile(`token "abiwhbo" appears 3 times, only importing once`)))
+		require.True(t, logs.ContainsMatch(regexp.MustCompile(`token "pzqpvnz" appears 2 times, only importing once`)))
 	})
 
 	t.Run("import with invalid tokens", func(t *testing.T) {
@@ -154,17 +121,17 @@ dfiwhsz
 		err = cmd.Execute()
 		require.Nil(t, err)
 
-		tokens := make([]string, 0)
+		tokens := make(map[string]bool)
 		rows, err := db.Query("SELECT token FROM tokens")
 		require.Nil(t, err)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
 			require.Nil(t, err)
-			tokens = append(tokens, token)
+			tokens[token] = true
 		}
-		require.Equal(t, []string{
-			"dfiwhsz",
+		require.Equal(t, map[string]bool{
+			"dfiwhsz": true,
 		}, tokens)
 
 		logs, err := testutils.NewLogs(&stderr)
