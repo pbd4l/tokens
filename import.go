@@ -15,13 +15,12 @@ import (
 
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func importCmd() *cobra.Command {
 	var file string
 	var bs int
-
+	var dsn string
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import tokens to a postgres database",
@@ -41,7 +40,9 @@ func importCmd() *cobra.Command {
 				r = f
 			}
 
-			dsn := viper.GetString("dsn")
+			if dsn == "" {
+				dsn = os.Getenv("TOKENS_DSN")
+			}
 			if dsn == "" {
 				return fmt.Errorf("missing postgres data source name")
 			}
@@ -49,16 +50,9 @@ func importCmd() *cobra.Command {
 			return importTokens(ctx, r, dsn, bs)
 		},
 	}
-
 	cmd.Flags().StringVarP(&file, "file", "f", "", "file to read the tokens from. will read from stdin if omitted")
 	cmd.Flags().IntVarP(&bs, "bs", "b", 1000, "batch size used for bulk import")
-
-	viper.SetEnvPrefix("tokens")
-
-	cmd.Flags().String("dsn", "", "postgres data source name (env TOKENS_DSN)")
-	must(viper.BindPFlag("dsn", cmd.Flags().Lookup("dsn")))
-	must(viper.BindEnv("dsn"))
-
+	cmd.Flags().StringVar(&dsn, "dsn", "", "postgres data source name (env TOKENS_DSN)")
 	return cmd
 }
 
