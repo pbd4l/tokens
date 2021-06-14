@@ -28,6 +28,7 @@ func importCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			log.SetOutput(cmd.ErrOrStderr()) // for testing
 
+			// SIGINT will cancel the cmd Context, which instructs the import to stop & rollback
 			ctx, _ := signal.NotifyContext(cmd.Context(), syscall.SIGINT)
 
 			var r io.Reader = cmd.InOrStdin()
@@ -41,6 +42,7 @@ func importCmd() *cobra.Command {
 			}
 
 			if dsn == "" {
+				// Allow setting DSN via an environment variable (more secure)
 				dsn = os.Getenv("TOKENS_DSN")
 			}
 			if dsn == "" {
@@ -93,7 +95,7 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 
 	// ensure the tokens table exists.
 	// tokens are 7 characters and must be unique, so we use CHAR(7) PRIMARY KEY.
-	// (consider moving to separate migration command?)
+	// TODO move to separate migration command?
 	_, err = tx.Exec("CREATE TABLE IF NOT EXISTS tokens (token CHAR(7) PRIMARY KEY)")
 	if err != nil {
 		return fmt.Errorf("could not create/ensure table: %w", err)
@@ -126,16 +128,16 @@ func importTokens(ctx context.Context, r io.Reader, dsn string, bs int) error {
 
 // insertTokensQuery builds a bulk insert query for tokens
 type insertTokensQuery struct {
-	sb   strings.Builder
-	args []interface{}
-	ms   int
+	sb      strings.Builder
+	args    []interface{}
+	maxSize int
 }
 
 func newInsertTokensQuery(maxSize int) *insertTokensQuery {
 	var q insertTokensQuery
 	q.sb.WriteString("INSERT INTO tokens (token) VALUES ")
 	q.args = make([]interface{}, 0, maxSize)
-	q.ms = maxSize
+	q.maxSize = maxSize
 	return &q
 }
 
@@ -150,13 +152,13 @@ func (q *insertTokensQuery) Exec(tx *sql.Tx) error {
 	}
 	q.sb.Reset()
 	q.sb.WriteString("INSERT INTO tokens (token) VALUES ")
-	q.args = make([]interface{}, 0, q.ms)
+	q.args = make([]interface{}, 0, q.maxSize)
 	return nil
 }
 
 func (q *insertTokensQuery) AddToken(token string) error {
 	l := len(q.args)
-	if l == q.ms {
+	if l == q.maxSize {
 		return fmt.Errorf("query is full")
 	}
 	if l == 0 {
@@ -169,5 +171,5 @@ func (q *insertTokensQuery) AddToken(token string) error {
 }
 
 func (q *insertTokensQuery) Full() bool {
-	return len(q.args) == q.ms
+	return len(q.args) == q.maxSize
 }
