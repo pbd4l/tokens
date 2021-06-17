@@ -14,26 +14,26 @@ import (
 
 func TestImport(t *testing.T) {
 	pg, err := testutils.NewPostgresContainer("tokens")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		err = pg.Terminate()
-		require.Nil(t, err)
+		require.NoError(t, err)
 	})
 
 	dsn, err := pg.Dsn()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	cmd := importCmd()
 	err = os.Setenv("TOKENS_DSN", dsn)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	db, err := sql.Open("postgres", dsn)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer db.Close()
 
 	t.Run("simple import", func(t *testing.T) {
 		_, err = db.Exec("DROP TABLE IF EXISTS tokens")
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		var stdin bytes.Buffer
 		stdin.WriteString(`jriwhbo
@@ -43,16 +43,16 @@ apvvirw
 		cmd.SetIn(&stdin)
 
 		err = cmd.Execute()
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		rows, err := db.Query("SELECT token FROM tokens")
-		require.Nil(t, err)
+		require.NoError(t, err)
 		count := 0
 		tokens := make(map[string]bool)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			count++
 			tokens[token] = true
 		}
@@ -66,7 +66,7 @@ apvvirw
 
 	t.Run("import with duplicates", func(t *testing.T) {
 		_, err = db.Exec("DROP TABLE IF EXISTS tokens")
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		var stdin bytes.Buffer
 		stdin.WriteString(`abiwhbo
@@ -82,16 +82,16 @@ abiwhbo
 		cmd.SetErr(&stderr)
 
 		err = cmd.Execute()
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		rows, err := db.Query("SELECT token FROM tokens")
-		require.Nil(t, err)
+		require.NoError(t, err)
 		count := 0
 		tokens := make(map[string]bool)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			count++
 			tokens[token] = true
 		}
@@ -103,14 +103,14 @@ abiwhbo
 		}, tokens)
 
 		logs, err := testutils.NewLogs(&stderr)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.True(t, logs.ContainsMatch(regexp.MustCompile(`token "abiwhbo" appears 3 times, only importing once`)))
 		require.True(t, logs.ContainsMatch(regexp.MustCompile(`token "pzqpvnz" appears 2 times, only importing once`)))
 	})
 
 	t.Run("import with invalid tokens", func(t *testing.T) {
 		_, err = db.Exec("DROP TABLE IF EXISTS tokens")
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		var stdin bytes.Buffer
 		stdin.WriteString(`1234567
@@ -125,16 +125,16 @@ dfiwhsz
 		cmd.SetErr(&stderr)
 
 		err = cmd.Execute()
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		rows, err := db.Query("SELECT token FROM tokens")
-		require.Nil(t, err)
+		require.NoError(t, err)
 		count := 0
 		tokens := make(map[string]bool)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
-			require.Nil(t, err)
+			require.NoError(t, err)
 			count++
 			tokens[token] = true
 		}
@@ -144,7 +144,7 @@ dfiwhsz
 		}, tokens)
 
 		logs, err := testutils.NewLogs(&stderr)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.True(t, logs.ContainsMatch(regexp.MustCompile(`token "1234567" is invalid, skipping`)))
 		require.True(t, logs.ContainsMatch(regexp.MustCompile(`token "ABCDEFG" is invalid, skipping`)))
 		require.True(t, logs.ContainsMatch(regexp.MustCompile(`token "hvvi" is invalid, skipping`)))

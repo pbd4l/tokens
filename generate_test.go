@@ -11,18 +11,18 @@ import (
 func TestGenerate(t *testing.T) {
 	cmd := generateCmd()
 	err := cmd.Flags().Set("number", "5")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = cmd.Flags().Set("seed", "1")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 
 	err = cmd.Execute()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	b, err := ioutil.ReadAll(&stdout)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, `xvlbzgb
 aicmraj
 wwhthct
