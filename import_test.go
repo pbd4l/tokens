@@ -45,15 +45,18 @@ apvvirw
 		err = cmd.Execute()
 		require.Nil(t, err)
 
-		tokens := make(map[string]bool)
 		rows, err := db.Query("SELECT token FROM tokens")
 		require.Nil(t, err)
+		count := 0
+		tokens := make(map[string]bool)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
 			require.Nil(t, err)
+			count++
 			tokens[token] = true
 		}
+		require.Equal(t, 3, count)
 		require.Equal(t, map[string]bool{
 			"jriwhbo": true,
 			"xwqpvnz": true,
@@ -81,15 +84,18 @@ abiwhbo
 		err = cmd.Execute()
 		require.Nil(t, err)
 
-		tokens := make(map[string]bool)
 		rows, err := db.Query("SELECT token FROM tokens")
 		require.Nil(t, err)
+		count := 0
+		tokens := make(map[string]bool)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
 			require.Nil(t, err)
+			count++
 			tokens[token] = true
 		}
+		require.Equal(t, 3, count)
 		require.Equal(t, map[string]bool{
 			"abiwhbo": true,
 			"pzqpvnz": true,
@@ -121,15 +127,18 @@ dfiwhsz
 		err = cmd.Execute()
 		require.Nil(t, err)
 
-		tokens := make(map[string]bool)
 		rows, err := db.Query("SELECT token FROM tokens")
 		require.Nil(t, err)
+		count := 0
+		tokens := make(map[string]bool)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
 			require.Nil(t, err)
+			count++
 			tokens[token] = true
 		}
+		require.Equal(t, 1, count)
 		require.Equal(t, map[string]bool{
 			"dfiwhsz": true,
 		}, tokens)
